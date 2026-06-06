@@ -192,10 +192,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry):
         """Get the options flow for this handler."""
-        return OptionsFlowHandler()
-    
+        return OptionsFlowHandler(config_entry)
+
 class OptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Qingping CGS1."""
+
+    def __init__(self, config_entry):
+        """Store the config entry without calling super().__init__ (object.__init__ takes no args)."""
+        self.config_entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -207,15 +211,15 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 **self.config_entry.data,
                 CONF_MODEL: user_input[CONF_MODEL]
             }
-            
+
             self.hass.config_entries.async_update_entry(
                 self.config_entry,
                 data=new_data,
             )
-            
+
             # Reload the integration to apply changes
-            await self.hass.config_entries.async_reload(self._config_entry_id)
-            
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+
             return self.async_create_entry(title="", data=user_input)
 
         return self.async_show_form(

@@ -24,11 +24,12 @@ from .const import (
     SENSOR_NOISE, SENSOR_PRESSURE, SENSOR_LIGHT, SENSOR_SIGNAL_STRENGTH, SENSOR_TLV_ETVOC,
     PERCENTAGE, PPM, PPB, CONCENTRATION, CONF_TVOC_UNIT, CONF_ETVOC_UNIT, DB,
     CONF_TEMPERATURE_OFFSET, CONF_HUMIDITY_OFFSET, CONF_UPDATE_INTERVAL,
-    CONF_REPORT_INTERVAL, CONF_SAMPLE_INTERVAL,
+    CONF_REPORT_INTERVAL, CONF_SAMPLE_INTERVAL, CONF_CO2_WORK_INTERVAL,
     ATTR_TYPE, ATTR_UP_ITVL, ATTR_DURATION,
     DEFAULT_TYPE, DEFAULT_DURATION, TLV_MODELS, JSON_MODELS,
     CONF_REPORT_MODE, REPORT_MODE_HISTORIC, REPORT_MODE_REALTIME
 )
+from . import async_subscribe_for_mac
 from .tlv_decoder import tlv_decode, is_tlv_format
 from .tlv_encoder import tlv_encode, int_to_bytes_little_endian
 
@@ -72,8 +73,12 @@ async def _auto_switch_report_mode_on_battery_state(hass, config_entry, mac, is_
         new_mode = REPORT_MODE_REALTIME
     else:
         # Historic mode when on battery
+        # Also reset report/sample intervals to safe defaults so the device
+        # has consistent state when leaving real-time mode
         packets = {
             0x42: int_to_bytes_little_endian(0, 2),   # Disable real-time
+            0x04: bytes([10]),  # Report interval: 10 min
+            0x05: bytes([60]),  # Sample interval: 60 sec
         }
         mode_name = "HISTORIC (on battery)"
         new_mode = REPORT_MODE_HISTORIC
@@ -240,7 +245,7 @@ async def _send_initial_tlv_config(hass, config_entry, mac, model):
     
     # Add CO2 work interval for CGP22C
     if model == "CGP22C":
-        new_data["co2_work_interval"] = 10  # 10 minutes
+        new_data[CONF_CO2_WORK_INTERVAL] = 10  # 10 minutes
     
     hass.config_entries.async_update_entry(config_entry, data=new_data)
     
@@ -249,11 +254,10 @@ async def _send_initial_tlv_config(hass, config_entry, mac, model):
         0x42: int_to_bytes_little_endian(21600, 2),  # Real-time for 6 hours
         0x19: bytes([1 if temp_unit == "fahrenheit" else 0])  # Temperature unit
     }
-    
-    # Add CO2 work interval for CGP22C
-    if model == "CGP22C":
-        packets[0x3C] = int_to_bytes_little_endian(10, 2)
-    
+
+    # Key 0x3C is undocumented and 4 bytes wide on CGP22C; do not write it
+    # The user can adjust 0x3B (CO2 measurement interval) via the CO2 Interval slider
+
     payload = tlv_encode(0x32, packets)
     topic = f"qingping/{mac}/down"
     
@@ -601,9 +605,7 @@ async def async_setup_entry(
         except Exception as e:
             _LOGGER.error("Error processing TLV message: %s", str(e))
 
-    await mqtt.async_subscribe(
-        hass, f"{MQTT_TOPIC_PREFIX}/{mac}/up", message_received, 1, encoding=None
-    )
+    await async_subscribe_for_mac(hass, mac, message_received)
     _LOGGER.info("Subscribed to MQTT topic: %s/%s/up", MQTT_TOPIC_PREFIX, mac)
 
     # Set up timer for periodic publishing

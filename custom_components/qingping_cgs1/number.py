@@ -13,7 +13,7 @@ from homeassistant.helpers.entity import EntityCategory
 from .const import (
     DOMAIN, CONF_TEMPERATURE_OFFSET, CONF_HUMIDITY_OFFSET, DEFAULT_OFFSET,
     CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL,
-    CONF_REPORT_INTERVAL, CONF_SAMPLE_INTERVAL,
+    CONF_REPORT_INTERVAL, CONF_SAMPLE_INTERVAL, CONF_CO2_WORK_INTERVAL,
     CONF_CO2_OFFSET, CONF_PM25_OFFSET, CONF_PM10_OFFSET,
     CONF_NOISE_OFFSET, CONF_TVOC_OFFSET, CONF_TVOC_INDEX_OFFSET, CONF_PRESSURE_OFFSET,
     CONF_POWER_OFF_TIME, CONF_AUTO_SLIDING_TIME, DEFAULT_SENSOR_OFFSET,
@@ -235,20 +235,21 @@ class QingpingTLVReportIntervalNumber(CoordinatorEntity, NumberEntity):
         await self.coordinator.async_request_refresh()
 
         # Send TLV command (KEY 0x04) - device must be plugged in
+        # 0x04 is 1 byte (device reports it as value * 60 = seconds)
         packets = {
-            0x04: int_to_bytes_little_endian(int_value, 2)
+            0x04: bytes([int_value & 0xFF])
         }
         payload = tlv_encode(0x32, packets)
         topic = f"qingping/{self._mac}/down"
         await mqtt.async_publish(self.hass, topic, payload)
 
-    async def async_added_to_hass(self) -> None:
+    async def async_added_to_hass(self):
         """Run when entity about to be added to hass."""
         await super().async_added_to_hass()
         self._handle_coordinator_update()
 
     @callback
-    def _handle_coordinator_update(self) -> None:
+    def _handle_coordinator_update(self):
         """Handle updated data from the coordinator."""
         if CONF_REPORT_INTERVAL not in self.coordinator.data:
             self.coordinator.data[CONF_REPORT_INTERVAL] = self._config_entry.data.get(CONF_REPORT_INTERVAL, 5)
@@ -293,8 +294,9 @@ class QingpingTLVSampleIntervalNumber(CoordinatorEntity, NumberEntity):
         await self.coordinator.async_request_refresh()
 
         # Send TLV command (KEY 0x05) - device must be plugged in
+        # 0x05 is 1 byte (sample interval in seconds)
         packets = {
-            0x05: int_to_bytes_little_endian(int_value, 2)
+            0x05: bytes([int_value & 0xFF])
         }
         payload = tlv_encode(0x32, packets)
         topic = f"qingping/{self._mac}/down"
@@ -419,9 +421,10 @@ class QingpingTLVPowerOffTimeNumber(CoordinatorEntity, NumberEntity):
 
         await self.coordinator.async_request_refresh()
 
-        # Send TLV command (KEY 0x3D)
+        # Send TLV command (KEY 0x3D - auto off time)
+        # 0x3D is 1 byte (value * 60 = seconds)
         packets = {
-            0x3D: int_to_bytes_little_endian(int_value, 2)
+            0x3D: bytes([int_value & 0xFF])
         }
         payload = tlv_encode(0x32, packets)
 
@@ -464,40 +467,41 @@ class QingpingTLVCO2WorkIntervalNumber(CoordinatorEntity, NumberEntity):
     @property
     def native_value(self) -> int:
         """Return the current value."""
-        return self.coordinator.data.get("co2_work_interval", 5)
+        return self.coordinator.data.get(CONF_CO2_WORK_INTERVAL, 5)
 
     async def async_set_native_value(self, value: float) -> None:
         """Update the value."""
         int_value = int(value)
-        self.coordinator.data["co2_work_interval"] = int_value
+        self.coordinator.data[CONF_CO2_WORK_INTERVAL] = int_value
         self.async_write_ha_state()
 
         # Update config entry
         new_data = dict(self._config_entry.data)
-        new_data["co2_work_interval"] = int_value
+        new_data[CONF_CO2_WORK_INTERVAL] = int_value
         self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
 
         await self.coordinator.async_request_refresh()
 
-        # Send TLV command (KEY 0x3C)
+        # Send TLV command (KEY 0x3B - CO2 measurement interval)
+        # 0x3B is 1 byte (value * 60 = interval in seconds)
         packets = {
-            0x3B: int_to_bytes_little_endian(int_value, 2)
+            0x3B: bytes([int_value & 0xFF])
         }
         payload = tlv_encode(0x32, packets)
 
         topic = f"qingping/{self._mac}/down"
         await mqtt.async_publish(self.hass, topic, payload)
 
-    async def async_added_to_hass(self) -> None:
+    async def async_added_to_hass(self):
         """Run when entity about to be added to hass."""
         await super().async_added_to_hass()
         self._handle_coordinator_update()
 
     @callback
-    def _handle_coordinator_update(self) -> None:
+    def _handle_coordinator_update(self):
         """Handle updated data from the coordinator."""
-        if "co2_work_interval" not in self.coordinator.data:
-            self.coordinator.data["co2_work_interval"] = self._config_entry.data.get("co2_work_interval", 5)
+        if CONF_CO2_WORK_INTERVAL not in self.coordinator.data:
+            self.coordinator.data[CONF_CO2_WORK_INTERVAL] = self._config_entry.data.get(CONF_CO2_WORK_INTERVAL, 5)
         self.async_write_ha_state()
 
 

@@ -41,7 +41,7 @@ def tlv_unpack(byte_array: bytes) -> dict[str, Any]:
     index = 0
     sub_pack_list = []
     
-    while index < length:
+    while index + 3 <= length:
         if index + 3 > length:
             _LOGGER.warning("Truncated TLV data at index %d", index)
             break
@@ -96,7 +96,7 @@ def decode_th_data(byte_array: bytes, product_id: int = 0) -> dict[str, Any]:
         "battery": battery,
     }
 
-    if product_id == 51:
+    if product_id in (3, 51, 93):
         out["co2"] = raw_3_5
     else:
         out["pressure"] = raw_3_5 / 100.0  # Convert to kPa

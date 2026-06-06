@@ -36,6 +36,7 @@ CONF_UPDATE_INTERVAL = "update_interval"
 # TLV device intervals
 CONF_REPORT_INTERVAL = "report_interval"  # Minutes (KEY 0x04)
 CONF_SAMPLE_INTERVAL = "sample_interval"  # Seconds (KEY 0x05)
+CONF_CO2_WORK_INTERVAL = "co2_work_interval"  # Minutes (KEY 0x3B, CGP22C)
 # TLV device report modes
 CONF_REPORT_MODE = "report_mode"
 REPORT_MODE_HISTORIC = "historic"
@@ -70,7 +71,7 @@ DEFAULT_MODEL = "CGS1"
 
 # Model to Product ID mapping (for TLV devices)
 MODEL_PRODUCT_IDS = {
-    "CGP22C": 93,  # CO₂ & Temp & RH Monitor
+    "CGP22C": 3,   # CO₂ & Temp & RH Monitor (actual productId reported by device firmware)
     "CGP23W": 38,  # Temp & RH Barometer Pro S
     "CGP22W": 92,  # Temp & RH Monitor Pro S
     "CGR1W": 96,  # Indoor Environment Monitor Screenless
